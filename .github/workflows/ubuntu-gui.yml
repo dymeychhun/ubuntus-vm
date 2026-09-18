@@ -26,7 +26,7 @@ jobs:
           CRD_CODE: ${{ secrets.CRD_CODE }}
           CRD_PIN: ${{ secrets.CRD_PIN }}
         run: |
-          ${CRD_CODE} --pin=${CRD_PIN}
+          ${{ secrets.CRD_CODE }} --pin=${{ secrets.CRD_PIN }}
 
       - name: Keep Alive
         run: |
