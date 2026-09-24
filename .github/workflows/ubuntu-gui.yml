@@ -1,48 +1,40 @@
-name: Ubuntu GUI (NoVNC)
+name: Ubuntu Web GUI
 
 on:
   workflow_dispatch:
-    inputs:
-      ngrok_token:
-        description: 'បញ្ចូល ngrok Authtoken របស់អ្នក'
-        required: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Install Desktop and NoVNC
+      - name: Install XFCE and NoVNC
         run: |
           sudo apt update
           sudo DEBIAN_FRONTEND=noninteractive apt install -y xfce4 desktop-base xscreensaver xfce4-terminal tightvncserver novnc websockify
 
-      - name: Start VNC and Web GUI
+      - name: Start VNC Server
         run: |
-          # បង្កើត VNC password (password: 123456)
           mkdir -p ~/.vnc
           echo "123456" | vncpasswd -f > ~/.vnc/passwd
           chmod 600 ~/.vnc/passwd
-          
-          # បើក VNC Server
           vncserver :1 -geometry 1280x720 -depth 24
-          
-          # បើក NoVNC (Port 6080)
           websockify -D --web=/usr/share/novnc/ 6080 localhost:5901
 
-      - name: Setup ngrok Tunnel
+      - name: Start Cloudflare Tunnel
         run: |
-          curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
-          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
-          sudo apt update && sudo apt install -y ngrok
+          # ទាញយក cloudflared
+          wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+          sudo dpkg -i cloudflared-linux-amd64.deb
           
-          ngrok config add-authtoken ${{ github.event.inputs.ngrok_token }}
-          ngrok http 6080 --log=stdout > ngrok.log &
-          sleep 5
+          # បើកដំណើរការ Tunnel ទៅកាន់ Port NoVNC
+          nohup cloudflared tunnel --url http://localhost:6080 > cloudflare.log 2>&1 &
           
-          # បង្ហាញ Public Link សម្រាប់ចូល GUI
-          echo "============================================="
-          curl -s http://localhost:4040/api/tunnels | grep -o 'https://[^"]*ngrok-free.app'
-          echo "============================================="
+          # រង់ចាំយក Public URL
+          sleep 6
+          echo "================================================================"
+          grep -o 'https://[-a-zA-Z0-9@:%._\+~#=]\+trycloudflare\.com' cloudflare.log | head -n 1
+          echo "================================================================"
+          echo "Password VNC គឺ: 123456"
 
       - name: Keep Alive
         run: |
