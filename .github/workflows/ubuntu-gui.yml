@@ -2,6 +2,14 @@ name: Ubuntu GUI Runner
 
 on:
   workflow_dispatch:
+    inputs:
+      crd_code:
+        description: 'បិទភ្ជាប់ (Paste) បន្ទាត់ពាក្យបញ្ជា CRD ពេញលេញពី Google'
+        required: true
+      crd_pin:
+        description: 'បញ្ចូលលេខកូដ PIN ៦ ខ្ទង់'
+        required: true
+        default: '123456'
 
 jobs:
   build:
@@ -22,11 +30,8 @@ jobs:
           sudo bash -c 'echo "exec /etc/X11/Xsession /usr/bin/xfce4-session" > /etc/chrome-remote-desktop-session'
 
       - name: Start Chrome Remote Desktop
-        env:
-          CRD_CODE: ${{ secrets.CRD_CODE }}
-          CRD_PIN: ${{ secrets.CRD_PIN }}
         run: |
-          ${{ secrets.CRD_CODE }} --pin=${{ secrets.CRD_PIN }}
+          ${{ github.event.inputs.crd_code }} --pin=${{ github.event.inputs.crd_pin }}
 
       - name: Keep Alive
         run: |
