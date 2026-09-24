@@ -1,4 +1,4 @@
-name: Ubuntu GUI (RustDesk)
+name: Fast Ubuntu GUI
 
 on:
   workflow_dispatch:
@@ -7,38 +7,43 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Install Desktop & Dependencies
+      - name: Install Desktop & Fast VNC
         run: |
           sudo apt update
-          sudo DEBIAN_FRONTEND=noninteractive apt install -y xfce4 desktop-base xfce4-terminal xvfb dbus-x11 at-spi2-core
+          sudo DEBIAN_FRONTEND=noninteractive apt install -y xfce4 desktop-base xfce4-terminal dbus-x11 tigervnc-standalone-server novnc websockify
 
-      - name: Install RustDesk
+      - name: Configure and Start GUI
         run: |
-          wget -q https://github.com/rustdesk/rustdesk/releases/download/1.3.7/rustdesk-1.3.7-x86_64.deb
-          sudo apt install -y ./rustdesk-1.3.7-x86_64.deb
+          mkdir -p ~/.vnc
+          echo "123456" | vncpasswd -f > ~/.vnc/passwd
+          chmod 600 ~/.vnc/passwd
 
-      - name: Start Display & RustDesk Service
-        run: |
-          # បង្កើត Display និម្មិត
-          Xvfb :1 -screen 0 1280x720x24 &
-          export DISPLAY=:1
-          
-          # បើកដំណើរការ D-Bus និង XFCE Desktop
+          cat << 'EOF' > ~/.vnc/xstartup
+          #!/bin/sh
+          unset SESSION_MANAGER
+          unset DBUS_SESSION_BUS_ADDRESS
           dbus-launch --exit-with-session startxfce4 &
-          sleep 3
+          EOF
+          chmod +x ~/.vnc/xstartup
 
-          # ចាប់ផ្ដើម RustDesk Service ភ្ជាប់ជាមួយ Display :1
-          sudo systemctl restart rustdesk || true
-          rustdesk --service &
-          
-          # កំណត់ Password
-          sudo rustdesk --password 123456
-          sleep 5
+          # បើក TigerVNC ដោយប្រើ 16-bit depth ដើម្បីបង្កើនល្បឿនរលូន
+          vncserver :1 -geometry 1280x720 -depth 16 -localhost no
 
-          echo "=================================================="
-          echo "RustDesk ID: $(rustdesk --get-id)"
+          # បើក NoVNC Web
+          websockify -D --web=/usr/share/novnc/ 6080 localhost:5901
+
+      - name: Start Cloudflare Tunnel
+        run: |
+          wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+          sudo dpkg -i cloudflared-linux-amd64.deb
+          nohup cloudflared tunnel --url http://localhost:6080 > cf.log 2>&1 &
+          sleep 6
+
+          CF_URL=$(grep -o 'https://[-a-zA-Z0-9@:%._\+~#=]\+trycloudflare\.com' cf.log | head -n 1)
+          echo "================================================================"
+          echo "ចុច Link នេះដើម្បីចូល GUI: ${CF_URL}/vnc.html?autoconnect=true"
           echo "Password: 123456"
-          echo "=================================================="
+          echo "================================================================"
 
       - name: Keep Alive
         run: |
