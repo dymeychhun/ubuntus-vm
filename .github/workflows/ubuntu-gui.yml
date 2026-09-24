@@ -1,37 +1,48 @@
-name: Ubuntu GUI Runner
+name: Ubuntu GUI (NoVNC)
 
 on:
   workflow_dispatch:
     inputs:
-      crd_code:
-        description: 'បិទភ្ជាប់ (Paste) បន្ទាត់ពាក្យបញ្ជា CRD ពេញលេញពី Google'
+      ngrok_token:
+        description: 'បញ្ចូល ngrok Authtoken របស់អ្នក'
         required: true
-      crd_pin:
-        description: 'បញ្ចូលលេខកូដ PIN ៦ ខ្ទង់'
-        required: true
-        default: '123456'
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Update and Install XFCE Desktop
+      - name: Install Desktop and NoVNC
         run: |
           sudo apt update
-          sudo DEBIAN_FRONTEND=noninteractive apt install -y xfce4 desktop-base xscreensaver xfce4-terminal
+          sudo DEBIAN_FRONTEND=noninteractive apt install -y xfce4 desktop-base xscreensaver xfce4-terminal tightvncserver novnc websockify
 
-      - name: Install Chrome Remote Desktop
+      - name: Start VNC and Web GUI
         run: |
-          wget -q https://dl.google.com/linux/direct/chrome-remote-desktop_current_amd64.deb
-          sudo dpkg --install chrome-remote-desktop_current_amd64.deb || sudo apt install -f -y
+          # បង្កើត VNC password (password: 123456)
+          mkdir -p ~/.vnc
+          echo "123456" | vncpasswd -f > ~/.vnc/passwd
+          chmod 600 ~/.vnc/passwd
+          
+          # បើក VNC Server
+          vncserver :1 -geometry 1280x720 -depth 24
+          
+          # បើក NoVNC (Port 6080)
+          websockify -D --web=/usr/share/novnc/ 6080 localhost:5901
 
-      - name: Setup Desktop Session
+      - name: Setup ngrok Tunnel
         run: |
-          sudo bash -c 'echo "exec /etc/X11/Xsession /usr/bin/xfce4-session" > /etc/chrome-remote-desktop-session'
-
-      - name: Start Chrome Remote Desktop
-        run: |
-          ${{ github.event.inputs.crd_code }} --pin=${{ github.event.inputs.crd_pin }}
+          curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
+          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
+          sudo apt update && sudo apt install -y ngrok
+          
+          ngrok config add-authtoken ${{ github.event.inputs.ngrok_token }}
+          ngrok http 6080 --log=stdout > ngrok.log &
+          sleep 5
+          
+          # បង្ហាញ Public Link សម្រាប់ចូល GUI
+          echo "============================================="
+          curl -s http://localhost:4040/api/tunnels | grep -o 'https://[^"]*ngrok-free.app'
+          echo "============================================="
 
       - name: Keep Alive
         run: |
